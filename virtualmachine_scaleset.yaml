@@ -1,0 +1,109 @@
+- name: Create Azure VMSS
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  tasks:
+  - name: Create a resource group
+    azure_rm_resourcegroup:
+      name: sertacansible
+      location: eastus
+
+  - name: Create virtual network
+    azure_rm_virtualnetwork:
+      resource_group: sertacansible
+      name: sertacVnet
+      address_prefixes: "10.0.0.0/16"
+
+  - name: Add subnet
+    azure_rm_subnet:
+      resource_group: sertacansible
+      name: sertacSubnet
+      address_prefix: "10.0.1.0/24"
+      virtual_network: sertacVnet
+
+  - name: Create public IP address
+    azure_rm_publicipaddress:
+      resource_group: sertacansible
+      allocation_method: Static
+      name: sertacPublicIP
+
+  # - name: Create a load balancer
+  #   azure_rm_loadbalancer:
+  #     name: sertacloadbalancer
+  #     resource_group: sertacansible
+  #     public_ip: sertacansible
+  #     probe_protocol: Tcp
+  #     probe_port: 80
+  #     probe_interval: 10
+  #     probe_fail_count: 3
+  #     protocol: Tcp
+  #     load_distribution: Default
+  #     frontend_port: 80
+  #     backend_port: 8080
+  #     idle_timeout: 4
+  #     natpool_frontend_port_start: 1030
+  #     natpool_frontend_port_end: 1040
+  #     natpool_backend_port: 80
+  #     natpool_protocol: Tcp
+
+  # - name: Create Network Security Group that allows SSH
+  #   azure_rm_securitygroup:
+  #     resource_group: sertacansible
+  #     name: sertacNetworkSecurityGroup
+  #     rules:
+  #       - name: SSH
+  #         protocol: Tcp
+  #         destination_port_range: 22
+  #         access: Allow
+  #         priority: 1001
+  #         direction: Inbound
+
+  - name: get ssh key
+    command: cat /app/ansible/id_rsa.pub
+    register: sshkey
+
+  - name: Create VMSS
+    azure_rm_virtualmachine_scaleset:
+      resource_group: sertacansible
+      state: absent
+      name: sertacVMSS
+      vm_size: Standard_DS1_v2
+      capacity: 1
+      upgrade_policy: Manual
+      tier: Standard
+      virtual_network_name: sertacVnet
+      subnet_name: sertacSubnet
+      os_disk_caching: ReadWrite
+      # load_balancer_name: sertacloadbalancer
+      admin_username: sozercan
+      ssh_password_enabled: false
+      ssh_public_keys:
+        - path: /home/sozercan/.ssh/authorized_keys
+          key_data: '{{ sshkey.stdout }}'
+      managed_disk_type: Premium_LRS
+      image:
+        offer: CoreOS
+        publisher: CoreOS
+        sku: Stable
+        version: latest
+      data_disks:
+        - lun: 0
+          disk_size_gb: 64
+          caching: ReadWrite
+          managed_disk_type: Premium_LRS
+
+  # - name: Get facts for a virtual machine scale set
+  #   azure_rm_virtualmachine_scaleset_facts:
+  #     resource_group: sertacansible
+  #     name: sertacVMSS
+
+  # - name: Get facts for all virtual networks
+  #   azure_rm_virtualmachine_scaleset_facts:
+  #     resource_group: sertacansible
+
+  # - name: Get facts by tags
+  #   azure_rm_virtualmachine_scaleset_facts:
+  #     resource_group: sertacansible
+  #     tags:
+  #       - sertactest
